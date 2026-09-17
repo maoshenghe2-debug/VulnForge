@@ -133,3 +133,48 @@ def test_end_to_end_triage(tmp_path):
         if cluster.get("minimized", {}).get("ok"):
             assert cluster["minimized"]["minimized_size"] <= cluster["minimized"]["original_size"]
     assert (job_dir / "triage" / "triage.json").exists()
+
+
+def test_merge_r1_weak_cluster_absorbed():
+    """R1：全 `??` 的归因弱簇并入同信号最强簇（无论先后）。"""
+    from vulnforge.triage.dedup import cluster_crashes
+
+    entries = [
+        {"file": "weak_1", "signal": 11, "frames": ["??", "??"], "fault_addr": 0x1000},
+        {"file": "strong_1", "signal": 11, "frames": ["vuln_entry:14", "??"], "fault_addr": 0x2000},
+    ]
+    clusters = cluster_crashes(entries)
+    assert len(clusters) == 1
+    assert sorted(clusters[0].members) == ["strong_1", "weak_1"]
+    assert clusters[0].merged_from
+
+
+def test_merge_r2_shared_source_frame():
+    """R2：共享 `vuln_entry:<行号>` 源帧的同源多形态合并。"""
+    from vulnforge.triage.dedup import cluster_crashes
+
+    entries = [
+        {"file": "a", "signal": 11, "frames": ["__printf_buffer:348", "vuln_entry:17"], "fault_addr": 0x3000},
+        {"file": "b", "signal": 11, "frames": ["__wcsnlen_avx2:76", "vuln_entry:17"], "fault_addr": 0x4000},
+    ]
+    clusters = cluster_crashes(entries)
+    assert len(clusters) == 1
+    assert len(clusters[0].members) == 2
+
+
+def test_no_merge_across_signals_or_source_lines():
+    """精度：不同信号 / 不同源行不合并；弱簇并入同信号强簇（按成员数、并列取先者）。"""
+    from vulnforge.triage.dedup import cluster_crashes
+
+    entries = [
+        {"file": "s11_weak", "signal": 11, "frames": ["??"], "fault_addr": 0x1000},
+        {"file": "s6_abort", "signal": 6, "frames": ["__GI_abort:79"], "fault_addr": 0x1000},
+        {"file": "line14", "signal": 11, "frames": ["vuln_entry:14"], "fault_addr": 0x5000},
+        {"file": "line25", "signal": 11, "frames": ["vuln_entry:25"], "fault_addr": 0x6000},
+    ]
+    clusters = cluster_crashes(entries)
+    by_member = {member: cluster for cluster in clusters for member in cluster.members}
+    assert len(clusters) == 3
+    assert by_member["s11_weak"].key == by_member["line14"].key  # R1 并入先出现的最强簇
+    assert by_member["s6_abort"].members == ["s6_abort"]  # 跨信号不合并
+    assert by_member["line25"].key != by_member["line14"].key  # 不同源行不合并

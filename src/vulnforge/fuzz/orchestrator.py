@@ -7,12 +7,18 @@
 - 断点续跑：``run.sh`` 使用 ``-i-`` 恢复；``STOP`` 文件触发优雅停止。
 
 运行环境：Windows 经 WSL2（Ubuntu），Linux 原生。
+
+设计约束（重要）：一切含**通配符 / 变量展开**的复杂逻辑必须写入脚本文件
+（``run.sh`` 等）后执行——经 wsl.exe 传递的 ``bash -lc "..."`` 字符串会受
+Windows 侧参数处理影响（实测：未匹配 Windows 文件的 glob 会被清空，导致
+``for f in out/*/crashes/id*`` 静默匹配不到）；脚本文件方式不受影响。
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -20,7 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .. import __version__
-from ..wsl import DISTRO, bash, is_windows, to_posix
+from ..wsl import DISTRO, is_windows, to_posix
 from .build import build_target
 
 WORKSPACE = Path(".vulnforge")
@@ -59,7 +65,11 @@ def prepare_corpus(job: Path, seeds: Path | None = None) -> int:
 
 
 def write_run_sh(job: Path, *, cores: int, duration_s: int, resume: bool) -> Path:
-    """生成 run.sh（LF 行尾；含 STOP 优雅停止与 RUN_DONE 标记）。"""
+    """生成 run.sh（LF 行尾）：多核运行 → 优雅停止 → 崩溃收集 → RUN_DONE。
+
+    收集在脚本内完成（而非 Python 侧 shell 字符串）：AFL 崩溃文件名含 ':'，
+    统一 ``tr ':' '_'`` 归一化，保证 Windows/Linux 两侧路径可用。
+    """
     input_flag = "-i-" if resume else "-i corpus"
     launches = []
     for idx in range(cores):
@@ -94,6 +104,13 @@ def write_run_sh(job: Path, *, cores: int, duration_s: int, resume: bool) -> Pat
         "  sleep 2\n"
         "done\n"
         "wait 2>/dev/null\n"
+        "# —— 崩溃收集（名称归一化：':' → '_'）——\n"
+        "mkdir -p crashes\n"
+        "for f in out/*/crashes/id*; do\n"
+        '  [ -f "$f" ] || continue\n'
+        '  inst=$(basename "$(dirname "$(dirname "$f")")")\n'
+        "  cp \"$f\" \"crashes/${inst}_$(basename \"$f\" | tr ':' '_')\"\n"
+        "done\n"
         "echo DONE > RUN_DONE\n"
     )
     path = job / "run.sh"
@@ -280,24 +297,32 @@ def run_job(
         ]
         state["stats"] = _aggregate(workers)
 
-    # 收集崩溃：WSL/Linux 内 cp 到统一目录，随后做名称归一化——
-    # AFL 文件名含 ':'，Windows/DrvFs 暴露为私有区字符 U+F03A，统一替换为 '_'（双平台一致）
+    # 崩溃由 run.sh 在 WSL/Linux 内收集（':'=>'_' 归一化已完成）；此处仅做 Windows 侧兜底
+    # 归一化（DrvFs 私有区字符 U+F03A → '_'，历史遗留场景）与最终清点。
     crashes_dir = job / "crashes"
     crashes_dir.mkdir(exist_ok=True)
-    collect_cmd = (
-        f"cd {to_posix(job)} && mkdir -p crashes && "
-        "for f in out/*/crashes/id*; do "
-        '[ -f "$f" ] || continue; '
-        'inst=$(basename "$(dirname "$(dirname "$f")")"); '
-        'cp "$f" "crashes/${inst}_$(basename "$f")"; '
-        "done"
-    )
-    _code, _output = bash(collect_cmd, timeout=120)
     for item in list(crashes_dir.iterdir()):
         if item.is_file():
             new_name = item.name.replace("\uf03a", "_").replace(":", "_")
             if new_name != item.name:
                 item.rename(crashes_dir / new_name)
+    # 兜底收集：再扫一遍 out/（Windows 侧路径），补齐脚本收集可能遗漏的崩溃
+    out_dir = job / "out"
+    if out_dir.is_dir():
+        for inst_dir in sorted(out_dir.iterdir()):
+            cdir = inst_dir / "crashes"
+            if not cdir.is_dir():
+                continue
+            for item in cdir.iterdir():
+                if not item.is_file() or not re.search(r"id[:\uf03a]\d", item.name):
+                    continue
+                safe_name = f"{inst_dir.name}_{item.name}".replace("\uf03a", "_").replace(":", "_")
+                dest = crashes_dir / safe_name
+                if not dest.exists():
+                    try:
+                        shutil.copy2(item, dest)
+                    except OSError:
+                        continue
     collected = sorted(str(item) for item in crashes_dir.glob("*") if item.is_file())
     state["artifacts"]["crash_files"] = collected
 

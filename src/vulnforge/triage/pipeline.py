@@ -77,6 +77,7 @@ def run_triage(job_dir: Path | str, *, minimize: bool = True, limit: int | None 
             "frames": cluster.frames,
             "count": len(cluster.members),
             "members": cluster.members,
+            "merged_from": list(cluster.merged_from),
         }
         if minimize:
             minfo = minimize_crash(binary, Path(rep_file), minimized_dir)

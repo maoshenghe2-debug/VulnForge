@@ -79,6 +79,10 @@ def test_write_run_sh_contract(tmp_path):
     assert '-V "30"' in text
     resume_script = write_run_sh(job, cores=1, duration_s=5, resume=True)
     assert "-i-" in resume_script.read_text(encoding="utf-8")
+    # 崩溃收集块（在脚本内完成；':'→'_' 归一化——wsl.exe 字符串方式会吞掉通配符，勿改回）
+    assert "mkdir -p crashes" in text
+    assert "tr ':' '_'" in text
+    assert "crashes/${inst}_" in text
 
 
 def test_parse_fuzzer_stats(tmp_path):

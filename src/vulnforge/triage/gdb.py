@@ -1,4 +1,8 @@
-"""gdb 批处理分析：提取信号 / 故障地址 / 归一化栈帧（地址与参数剥离）。"""
+"""gdb 批处理分析：提取信号 / 故障地址 / 归一化栈帧（地址与参数剥离）。
+
+bt 深度 16（归一化取前 12 帧）：栈底保留 libc/启动帧，便于聚类阶段的
+「同源帧合并」（R2：共享 ``vuln_entry:<行号>``）。
+"""
 
 from __future__ import annotations
 
@@ -14,13 +18,15 @@ SIGNAL_RE = re.compile(r"VF_SIGNAL=(\d+)")
 LINE_RE = re.compile(r"at [^:]+:(\d+)")
 FUNC_IN_RE = re.compile(r"\bin ([A-Za-z_][A-Za-z0-9_.$]*)")
 
+ANALYZE_TOP = 12
+
 GDB_TEMPLATE = (
     "set pagination off\n"
     "set confirm off\n"
     "run < {crash}\n"
     'printf "VF_FAULT_ADDR=0x%lx\\n", (unsigned long)$_siginfo._sifields._sigfault.si_addr\n'
     'printf "VF_SIGNAL=%d\\n", $_siginfo.si_signo\n'
-    "bt 8\n"
+    "bt 16\n"
     "quit\n"
 )
 
@@ -58,7 +64,7 @@ def normalize_frames(text: str, top: int = 5) -> list[str]:
 
 
 def analyze_crash(binary: Path | str, crash: Path | str, workdir: Path | str, timeout: int = 120) -> GdbInfo:
-    """在 WSL/Linux 中用 gdb 批处理分析崩溃：信号 / 故障地址 / 栈帧。"""
+    """在 WSL/Linux 中用 gdb 批处理分析崩溃：信号 / 故障地址 / 栈帧（前 12 帧）。"""
     binary = Path(binary)
     crash = Path(crash)
     workdir = Path(workdir)
@@ -77,7 +83,7 @@ def analyze_crash(binary: Path | str, crash: Path | str, workdir: Path | str, ti
     signal_match = SIGNAL_RE.search(output)
     if signal_match:
         info.signal = int(signal_match.group(1))
-    info.frames = normalize_frames(output, top=5)
+    info.frames = normalize_frames(output, top=ANALYZE_TOP)
     info.ok = bool(info.frames) or info.signal != 0
     if not info.ok:
         info.error = output[-1500:]

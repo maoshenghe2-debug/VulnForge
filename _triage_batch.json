@@ -1,0 +1,107 @@
+{
+  "stack_overflow": [
+    {
+      "key": "9e85baf9e3901270",
+      "signal": 11,
+      "frames": [
+        "??",
+        "??"
+      ],
+      "count": 1
+    },
+    {
+      "key": "b9cc79c1d264303f",
+      "signal": 11,
+      "frames": [
+        "vuln_entry:14",
+        "??",
+        "??",
+        "??",
+        "??"
+      ],
+      "count": 1
+    }
+  ],
+  "heap_overflow": [
+    {
+      "key": "2a6ad965e6adab48",
+      "signal": 11,
+      "frames": [
+        "__memcpy_avx_unaligned_erms:660",
+        "vuln_entry:25",
+        "__libc_start_call_main:58",
+        "__libc_start_main_impl:360",
+        "_start"
+      ],
+      "count": 2
+    }
+  ],
+  "double_free": [
+    {
+      "key": "e4fb978ccba25e45",
+      "signal": 6,
+      "frames": [
+        "__pthread_kill_implementation:44",
+        "__pthread_kill_internal:78",
+        "__GI___pthread_kill:89",
+        "__GI_raise:26",
+        "__GI_abort:79"
+      ],
+      "count": 2
+    }
+  ],
+  "integer_overflow": [
+    {
+      "key": "5a6fc3993cc81f12",
+      "signal": 11,
+      "frames": [
+        "__memcpy_avx_unaligned_erms:523",
+        "vuln_entry:32",
+        "__libc_start_call_main:58",
+        "__libc_start_main_impl:360",
+        "_start"
+      ],
+      "count": 2
+    }
+  ],
+  "format_string": [
+    {
+      "key": "baa602dd9f1c58e9",
+      "signal": 11,
+      "frames": [
+        "__printf_buffer:348",
+        "__vfprintf_internal:1544",
+        "__printf:33",
+        "vuln_entry:17",
+        "__libc_start_call_main:58"
+      ],
+      "count": 1
+    },
+    {
+      "key": "f075547995c6ea86",
+      "signal": 11,
+      "frames": [
+        "__wcsnlen_avx2:76",
+        "__wcsrtombs:101",
+        "outstring_converted_wide_string:236",
+        "__printf_buffer:448",
+        "__vfprintf_internal:1544"
+      ],
+      "count": 1
+    }
+  ],
+  "command_injection": [
+    {
+      "key": "8ee264b155e5c308",
+      "signal": 11,
+      "frames": [
+        "vuln_entry:25",
+        "??",
+        "??",
+        "??",
+        "??"
+      ],
+      "count": 1
+    }
+  ]
+}

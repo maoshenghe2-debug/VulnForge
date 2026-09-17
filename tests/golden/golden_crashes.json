@@ -1,0 +1,195 @@
+{
+  "$comment": "VulnForge golden 标注集：6 个靶场、真实 fuzz 崩溃（gdb bt16 归一化帧）。label = 样本（真实缺陷），用于 pairwise F1 基准。",
+  "jobs": [
+    {
+      "label": "stack_overflow",
+      "crashes": [
+        {
+          "file": "main_id_000000,sig_11,src_000001,time_702,execs_132,op_havoc,rep_3",
+          "signal": 11,
+          "fault_addr": 140737350091073,
+          "frames": [
+            "??",
+            "??"
+          ]
+        },
+        {
+          "file": "s1_id_000000,sig_11,src_000001,time_943,execs_186,op_havoc,rep_4",
+          "signal": 11,
+          "fault_addr": 0,
+          "frames": [
+            "vuln_entry:14",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "heap_overflow",
+      "crashes": [
+        {
+          "file": "main_id_000000,sig_11,src_000001,time_2082,execs_191,op_havoc,rep_8",
+          "signal": 11,
+          "fault_addr": 93824995557376,
+          "frames": [
+            "__memcpy_avx_unaligned_erms:660",
+            "vuln_entry:25",
+            "__libc_start_call_main:58",
+            "__libc_start_main_impl:360",
+            "_start"
+          ]
+        },
+        {
+          "file": "s1_id_000000,sig_11,src_000001,time_924,execs_42,op_havoc,rep_5",
+          "signal": 11,
+          "fault_addr": 93824995557376,
+          "frames": [
+            "__memcpy_avx_unaligned_erms:660",
+            "vuln_entry:25",
+            "__libc_start_call_main:58",
+            "__libc_start_main_impl:360",
+            "_start"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "double_free",
+      "crashes": [
+        {
+          "file": "main_id_000000,sig_06,src_000000,time_684,execs_11,op_havoc,rep_3",
+          "signal": 6,
+          "fault_addr": 815,
+          "frames": [
+            "__pthread_kill_implementation:44",
+            "__pthread_kill_internal:78",
+            "__GI___pthread_kill:89",
+            "__GI_raise:26",
+            "__GI_abort:79",
+            "__libc_message_impl:134",
+            "malloc_printerr:5775",
+            "_int_free:4541",
+            "__GI___libc_free:3398",
+            "vuln_entry:25",
+            "__libc_start_call_main:58",
+            "__libc_start_main_impl:360"
+          ]
+        },
+        {
+          "file": "s1_id_000000,sig_06,src_000000,time_312,execs_10,op_havoc,rep_2",
+          "signal": 6,
+          "fault_addr": 840,
+          "frames": [
+            "__pthread_kill_implementation:44",
+            "__pthread_kill_internal:78",
+            "__GI___pthread_kill:89",
+            "__GI_raise:26",
+            "__GI_abort:79",
+            "__libc_message_impl:134",
+            "malloc_printerr:5775",
+            "_int_free:4541",
+            "__GI___libc_free:3398",
+            "vuln_entry:25",
+            "__libc_start_call_main:58",
+            "__libc_start_main_impl:360"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "integer_overflow",
+      "crashes": [
+        {
+          "file": "main_id_000000,sig_11,src_000000,time_764,execs_122,op_havoc,rep_1",
+          "signal": 11,
+          "fault_addr": 93829287240109,
+          "frames": [
+            "__memcpy_avx_unaligned_erms:523",
+            "vuln_entry:32",
+            "__libc_start_call_main:58",
+            "__libc_start_main_impl:360",
+            "_start"
+          ]
+        },
+        {
+          "file": "s1_id_000000,sig_11,src_000000,time_258,execs_27,op_havoc,rep_2",
+          "signal": 11,
+          "fault_addr": 93829287240111,
+          "frames": [
+            "__memcpy_avx_unaligned_erms:523",
+            "vuln_entry:32",
+            "__libc_start_call_main:58",
+            "__libc_start_main_impl:360",
+            "_start"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "format_string",
+      "crashes": [
+        {
+          "file": "main_id_000000,sig_11,src_000000,time_4887,execs_788,op_havoc,rep_7",
+          "signal": 11,
+          "fault_addr": 4206,
+          "frames": [
+            "__printf_buffer:348",
+            "__vfprintf_internal:1544",
+            "__printf:33",
+            "vuln_entry:17",
+            "__libc_start_call_main:58",
+            "__libc_start_main_impl:360",
+            "_start"
+          ]
+        },
+        {
+          "file": "s1_id_000000,sig_11,src_000000,time_813,execs_137,op_havoc,rep_2",
+          "signal": 11,
+          "fault_addr": 21285,
+          "frames": [
+            "__wcsnlen_avx2:76",
+            "__wcsrtombs:101",
+            "outstring_converted_wide_string:236",
+            "__printf_buffer:448",
+            "__vfprintf_internal:1544",
+            "__printf:33",
+            "vuln_entry:17",
+            "__libc_start_call_main:58",
+            "__libc_start_main_impl:360",
+            "_start"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "command_injection",
+      "crashes": [
+        {
+          "file": "main_id_000000,sig_11,src_000001+000000,time_933,execs_130,op_splice,rep_5",
+          "signal": 11,
+          "fault_addr": 0,
+          "frames": [
+            "vuln_entry:25",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??",
+            "??"
+          ]
+        }
+      ]
+    }
+  ]
+}
