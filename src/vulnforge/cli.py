@@ -272,6 +272,73 @@ def triage_run(
     console.print(f"报告：[bold]{result['job_dir']}/triage/triage.json[/bold]")
 
 
+@app.command()
+def report(
+    job: str = typer.Argument(..., help="fuzz 任务目录（须先完成 triage）"),
+    as_json: bool = typer.Option(False, "--json", help="以 JSON 输出完整报告"),
+) -> None:
+    """生成 CNVD 风格崩溃报告（schema 校验 → report/report.json + report/report.md）。"""
+    from .report.generator import generate_report
+
+    try:
+        rep = generate_report(job)
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=4) from exc
+
+    if as_json:
+        console.print_json(jsonlib.dumps(rep, ensure_ascii=False))
+        return
+
+    table = Table(title=f"崩溃报告 · {rep['job_id']} · {rep['fuzzing']['unique_defects']} 个唯一缺陷")
+    table.add_column("编号", no_wrap=True)
+    table.add_column("标题", overflow="fold")
+    table.add_column("危险级", no_wrap=True)
+    table.add_column("CWE（建议）", no_wrap=True)
+    for finding in rep["findings"]:
+        table.add_row(finding["id"], finding["title"], finding["severity"], finding["cwe_suggestion"])
+    console.print(table)
+    console.print(f"报告：[bold]{job}/report/report.md[/bold]（JSON 见 report/report.json，已通过 schema 校验）")
+    console.print(f"复现入口：bash {job}/repro/<去重键>.sh（退出码 0=复现 / 1=未复现）")
+
+
+@app.command()
+def demo(
+    sample: str = typer.Option("stack_overflow", "--sample", help="靶场样本名（range/samples/*.c）"),
+    duration: str = typer.Option("20", "--duration", help="fuzz 时长（秒 / 30s / 1m）"),
+    cores: int = typer.Option(2, "--cores", min=1, max=32, help="并行核数"),
+    workspace: str = typer.Option(".vulnforge", "--workspace", help="工作区目录"),
+) -> None:
+    """单链路演示（≤10 分钟）：静态扫描 → fuzz → 崩溃分类 → 报告。"""
+    from .demo import run_demo
+
+    duration_s = _parse_duration(duration)
+
+    def progress(step: str, detail: str = "") -> None:
+        console.print(f"  [cyan]▶[/cyan] {step}" + (f"：{detail}" if detail else ""))
+
+    console.print(f"[bold]VulnForge demo[/bold] · 样本 {sample} · {cores} 核 × {duration_s}s")
+    try:
+        result = run_demo(sample, duration_s=duration_s, cores=cores, workspace=workspace, progress=progress)
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+
+    triage = result["triage"]
+    if not triage.get("ok"):
+        console.print(f"[yellow]未发现崩溃：{triage.get('error', '')}[/yellow]（可加大 --duration 重试）")
+        raise typer.Exit(code=4)
+    console.print(
+        f"✅ 完成（{result['elapsed_s']}s）：静态 {result['static']['count']} 处候选 → "
+        f"fuzz {result['fuzz']['stats']['execs_total']} 次 → "
+        f"{triage['summary']['crashes']} 崩溃 → {triage['summary']['clusters']} 个唯一缺陷 → "
+        f"报告 [bold]{result['job_dir']}/report/report.md[/bold]"
+    )
+
+
 def main() -> None:
     app()
 

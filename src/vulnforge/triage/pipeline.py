@@ -10,7 +10,7 @@ from .. import __version__
 from .dedup import cluster_crashes
 from .gdb import analyze_crash
 from .minimize import minimize_crash
-from .parse import list_crashes
+from .parse import SIGNAL_NAMES, list_crashes
 
 REPRO_TEMPLATE = """#!/usr/bin/env bash
 # VulnForge 复现脚本（退出码：0=复现 / 1=未复现）
@@ -74,6 +74,7 @@ def run_triage(job_dir: Path | str, *, minimize: bool = True, limit: int | None 
         entry: dict = {
             "key": cluster.key,
             "signal": cluster.signal,
+            "signal_name": SIGNAL_NAMES.get(cluster.signal, f"SIG{cluster.signal}"),
             "frames": cluster.frames,
             "count": len(cluster.members),
             "members": cluster.members,
