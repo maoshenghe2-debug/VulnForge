@@ -190,25 +190,26 @@ def check_workdir(base: Path) -> Check:
 def run_doctor(base: Path | None = None) -> dict:
     """运行全部检查，返回 JSON 可序列化报告（含 exit_code）。"""
     base = Path(base) if base is not None else Path.cwd()
+    apt_fix = "wsl -d Ubuntu -u root -- apt-get install -y" if _is_windows() else "sudo apt-get install -y"
     checks = [
         check_python(),
         check_wsl(),
-        _tool_check("git", "git", "git", "--version", "安装 git（WSL 内：apt-get install -y git）"),
+        _tool_check("git", "git", "git", "--version", f"{apt_fix} git"),
         _tool_check(
             "aflpp",
             "AFL++（afl-fuzz）",
             "afl-fuzz",
             "",
-            "wsl -d Ubuntu -u root -- apt-get install -y afl++ clang llvm",
+            f"{apt_fix} afl++ clang llvm",
         ),
         _tool_check(
             "afl_clang",
             "插桩编译器（afl-clang-fast）",
             "afl-clang-fast",
             "--version",
-            "wsl -d Ubuntu -u root -- apt-get install -y afl++ clang llvm",
+            f"{apt_fix} afl++ clang llvm",
         ),
-        _tool_check("gdb", "gdb（崩溃分析）", "gdb", "--version", "wsl -d Ubuntu -u root -- apt-get install -y gdb"),
+        _tool_check("gdb", "gdb（崩溃分析）", "gdb", "--version", f"{apt_fix} gdb"),
         check_tree_sitter(),
         check_disk(base),
         check_workdir(base),

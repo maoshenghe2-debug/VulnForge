@@ -31,6 +31,7 @@ jobs:
         run: .venv/bin/python -m pytest
       - name: Doctor smoke（退出码须 ≤1：0=全就绪 / 1=可用但有缺失）
         run: |
+          set +e
           .venv/bin/python -m vulnforge.cli doctor
           code=$?
           echo "doctor exit=$code"
