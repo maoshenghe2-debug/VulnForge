@@ -1,0 +1,75 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vulnforge"
+version = "0.1.0"
+description = "VulnForge · 智能漏洞挖掘工作台（静态分析 → 模糊测试 → 崩溃分析 → 报告闭环）"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Maosheng He", email = "maoshenghe2@gmail.com" }]
+keywords = [
+  "fuzzing",
+  "aflplusplus",
+  "static-analysis",
+  "tree-sitter",
+  "vulnerability-research",
+  "crash-triage",
+  "security",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+]
+dependencies = [
+  "typer>=0.12",
+  "rich>=13.7",
+  "pyyaml>=6.0",
+  "jinja2>=3.1",
+  "tree-sitter>=0.23",
+  "tree-sitter-language-pack>=0.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.5", "jsonschema>=4.20"]
+all = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.5", "jsonschema>=4.20"]
+
+[project.scripts]
+vulnforge = "vulnforge.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/maoshenghe2-debug/VulnForge"
+Repository = "https://github.com/maoshenghe2-debug/VulnForge"
+Changelog = "https://github.com/maoshenghe2-debug/VulnForge/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vulnforge"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+  "slow: 慢测试（迷你 fuzz 等）",
+  "requires_wsl: 需要 WSL2/Linux 与 AFL++ 环境",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+  "E501",   # 行长限制（中文注释与表格）
+  "B008",   # typer.Option(...) 默认值模式属预期用法
+  "RUF001", # 中文全角标点（有意使用）
+  "RUF002",
+  "RUF003",
+]
