@@ -1,0 +1,134 @@
+# VulnForge 静态分析规则库（v1.0 冻结集：C 7 条 + Python 6 条）
+#
+# 匹配语义：
+# - call_any:      函数调用名精确匹配（C 取 call_expression.function 文本）
+# - chain_any:     点链调用精确匹配（Python attribute 文本，如 os.system）
+# - arg_not_literal: 指定参数下标不是字符串字面量才命中（如 printf(fmt) 格式串风险）
+# - kwarg_true:    指定关键字参数为 True 才命中（如 subprocess.run(..., shell=True)）
+#
+# 新增规则无需改代码：编辑本文件即可（lang: c | python）。
+
+version: "0.1.0"
+
+rules:
+  # ---------------------------------------------------------------- C
+  - id: VF-C-001
+    lang: c
+    title: 无界字符串操作（潜在缓冲区溢出）
+    match:
+      call_any: [strcpy, strcat, gets]
+    severity: high
+    cwe: CWE-120
+    advice: 改用 strncpy/strncat/fgets 等有界函数，并显式校验缓冲区长度
+
+  - id: VF-C-002
+    lang: c
+    title: 无界格式化输出 sprintf
+    match:
+      call_any: [sprintf]
+    severity: high
+    cwe: CWE-120
+    advice: 改用 snprintf 并传入剩余缓冲区长度
+
+  - id: VF-C-003
+    lang: c
+    title: 内存拷贝（目标长度需与拷贝长度一致）
+    match:
+      call_any: [memcpy, memmove]
+    severity: medium
+    cwe: CWE-787
+    advice: 核对目标缓冲区大小与前两个长度参数来源，必要时先做边界判断
+
+  - id: VF-C-004
+    lang: c
+    title: 系统命令执行（潜在命令注入）
+    match:
+      call_any: [system, popen, execl, execlp, execv, execvp]
+    severity: high
+    cwe: CWE-78
+    advice: 避免拼接用户输入执行命令；如需执行，使用白名单与参数数组形式
+
+  - id: VF-C-005
+    lang: c
+    title: 格式化输出使用非字面量格式串（潜在格式串漏洞）
+    match:
+      call_any: [printf, vprintf]
+      arg_not_literal: 0
+    severity: medium
+    cwe: CWE-134
+    advice: 格式串必须为字面量，如 printf("%s", user_input)
+
+  - id: VF-C-006
+    lang: c
+    title: 输入函数缺少宽度限制（潜在溢出）
+    match:
+      call_any: [scanf, sscanf, fscanf]
+    severity: medium
+    cwe: CWE-120
+    advice: 为 %s 等转换符指定宽度（如 %63s），或改用 fgets 行读取
+
+  - id: VF-C-007
+    lang: c
+    title: fprintf 使用非字面量格式串
+    match:
+      call_any: [fprintf]
+      arg_not_literal: 1
+    severity: medium
+    cwe: CWE-134
+    advice: 格式串必须为字面量
+
+  # ---------------------------------------------------------------- Python
+  - id: VF-P-001
+    lang: python
+    title: eval/exec 动态执行（潜在代码注入）
+    match:
+      call_any: [eval, exec]
+    severity: high
+    cwe: CWE-95
+    advice: 避免动态求值；必须场景使用 ast.literal_eval 等受限解析
+
+  - id: VF-P-002
+    lang: python
+    title: os 命令执行（潜在命令注入）
+    match:
+      chain_any: [os.system, os.popen, os.execl, os.execv, os.execvp]
+    severity: high
+    cwe: CWE-78
+    advice: 改用 subprocess 参数数组形式并避免拼接 shell 命令
+
+  - id: VF-P-003
+    lang: python
+    title: subprocess 使用 shell=True（潜在命令注入）
+    match:
+      call_any: [subprocess.run, subprocess.call, subprocess.Popen, subprocess.check_output]
+      kwarg_true: shell
+    severity: high
+    cwe: CWE-78
+    advice: 使用参数列表形式（list argv）并移除 shell=True
+
+  - id: VF-P-004
+    lang: python
+    title: pickle 反序列化不受信数据（潜在对象注入）
+    match:
+      chain_any: [pickle.loads, pickle.load, cPickle.loads]
+    severity: high
+    cwe: CWE-502
+    advice: 不受信数据禁止 pickle；改用 JSON 等安全格式
+
+  - id: VF-P-005
+    lang: python
+    title: yaml.load 未指定安全加载器
+    match:
+      call_any: [yaml.load]
+    severity: medium
+    cwe: CWE-502
+    advice: 使用 yaml.safe_load 或显式指定 SafeLoader
+
+  - id: VF-P-006
+    lang: python
+    title: __import__ 动态导入
+    match:
+      call_any: [__import__]
+    severity: low
+    cwe: CWE-94
+    advice: 核对模块名来源，必要时使用白名单校验

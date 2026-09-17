@@ -60,6 +60,72 @@ def doctor(
     raise typer.Exit(code=report["exit_code"])
 
 
+static_app = typer.Typer(help="静态分析（tree-sitter + YAML 规则；C / Python）", no_args_is_help=True)
+app.add_typer(static_app, name="static")
+
+
+@static_app.command("scan")
+def static_scan(
+    path: str = typer.Argument(..., help="源码文件或目录路径"),
+    lang: str = typer.Option("c,python", "--lang", help="语言集合（逗号分隔：c,python）"),
+    as_json: bool = typer.Option(False, "--json", help="以 JSON 输出"),
+    out: str = typer.Option(None, "-o", "--out", help="结果导出路径（.json / .md）"),
+) -> None:
+    """静态候选扫描：输出「位置 + 所在函数 + 规则 + 证据」候选清单（供 fuzz 选型）。"""
+    from pathlib import Path as _Path
+
+    from .static.engine import load_rules, scan_path, to_markdown
+
+    langs = [item.strip().lower() for item in lang.split(",") if item.strip()]
+    target = _Path(path)
+    if not target.exists():
+        console.print(f"[red]路径不存在：{path}[/red]")
+        raise typer.Exit(code=2)
+
+    rules_doc = load_rules()
+    candidates, files_scanned = scan_path(target, langs, rules_doc)
+    payload = {
+        "tool": "vulnforge",
+        "version": __version__,
+        "target": str(target),
+        "langs": langs,
+        "files_scanned": files_scanned,
+        "rule_count": len(rules_doc["rules"]),
+        "candidates": [item.to_dict() for item in candidates],
+    }
+
+    if out:
+        out_path = _Path(out)
+        if out_path.suffix == ".json":
+            out_path.write_text(jsonlib.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        else:
+            out_path.write_text(to_markdown(payload), encoding="utf-8")
+        console.print(f"已导出：[bold]{out_path}[/bold]")
+
+    if as_json:
+        console.print_json(jsonlib.dumps(payload, ensure_ascii=False))
+        return
+
+    table = Table(title=f"静态候选 · {target} · {files_scanned} 个文件 · {len(candidates)} 处候选")
+    table.add_column("严重级", no_wrap=True)
+    table.add_column("规则", no_wrap=True)
+    table.add_column("位置", no_wrap=True)
+    table.add_column("所在函数", no_wrap=True)
+    table.add_column("证据", overflow="fold")
+    style = {"high": "red", "medium": "yellow", "low": "cyan"}
+    for item in candidates:
+        table.add_row(
+            f"[{style.get(item.severity, 'white')}]{item.severity}[/]",
+            item.rule_id,
+            f"{_Path(item.file).name}:{item.line}",
+            item.enclosing,
+            item.evidence,
+        )
+    console.print(table)
+    if not candidates:
+        console.print("[green]未发现候选（按当前规则集）[/green]")
+
+
 def main() -> None:
     app()
 
