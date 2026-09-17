@@ -126,6 +126,102 @@ def static_scan(
         console.print("[green]未发现候选（按当前规则集）[/green]")
 
 
+fuzz_app = typer.Typer(help="模糊测试编排（AFL++ / WSL2 或 Linux）", no_args_is_help=True)
+app.add_typer(fuzz_app, name="fuzz")
+
+
+def _parse_duration(text: str) -> int:
+    """解析时长：60 / 30s / 10m / 2h → 秒。"""
+    t = text.strip().lower()
+    try:
+        if t.endswith("h"):
+            return int(float(t[:-1]) * 3600)
+        if t.endswith("m"):
+            return int(float(t[:-1]) * 60)
+        if t.endswith("s"):
+            return int(float(t[:-1]))
+        return int(float(t))
+    except ValueError as exc:
+        raise typer.BadParameter(f"无法解析时长：{text}（示例：60 / 30s / 10m / 2h）") from exc
+
+
+@fuzz_app.command("run")
+def fuzz_run(
+    target: str = typer.Argument(..., help="目标源码（.c；需实现 vuln_entry，或自带 main 兼容 harness）"),
+    name: str = typer.Option(None, "--name", help="任务名（默认取文件名）"),
+    cores: int = typer.Option(4, "--cores", min=1, max=32, help="并行核数"),
+    duration: str = typer.Option("60", "--duration", help="时长：秒 / 30s / 10m / 2h"),
+    seeds: str = typer.Option(None, "--seeds", help="种子语料目录（缺省内置最小种子）"),
+    workspace: str = typer.Option(".vulnforge", "--workspace", help="工作区目录"),
+    resume: str = typer.Option(None, "--resume", help="续跑：既有任务目录（使用 -i- 恢复）"),
+) -> None:
+    """启动 fuzz 任务（阻塞至结束）：构建 → 语料 → 多核运行 → 收集崩溃。"""
+    from .fuzz.orchestrator import run_job
+
+    duration_s = _parse_duration(duration)
+    try:
+        state = run_job(
+            target,
+            name=name,
+            cores=cores,
+            duration_s=duration_s,
+            seeds=seeds,
+            resume=resume,
+            workspace=workspace,
+        )
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+
+    job_status = state["job"]["status"]
+    stats = state["stats"]
+    crashes = state["artifacts"].get("crash_files", [])
+    table = Table(title=f"fuzz 任务 · {state['job']['id']} · {job_status}")
+    table.add_column("实例", no_wrap=True)
+    table.add_column("执行数", justify="right")
+    table.add_column("exec/s", justify="right")
+    table.add_column("崩溃", justify="right")
+    for worker in state["workers"]:
+        table.add_row(worker["name"], str(worker["execs_done"]), f"{worker['execs_per_sec']:.0f}", str(worker["crashes"]))
+    console.print(table)
+    console.print(
+        f"总计：执行 {stats['execs_total']} · {stats['execs_per_sec']} exec/s · 崩溃 {stats['crashes_total']}（去重前）"
+    )
+    if crashes:
+        console.print(f"崩溃文件（{len(crashes)}）：")
+        for item in crashes[:10]:
+            console.print(f"  [yellow]{item}[/yellow]")
+    console.print(f"任务目录：[bold]{state['artifacts']['job_dir']}[/bold]（state.json 契约 / 可 --resume 续跑）")
+    if job_status == "failed":
+        console.print("[red]构建失败：查看任务目录 build/build.json 的 output_tail[/red]")
+        raise typer.Exit(code=3)
+    if job_status == "timeout":
+        raise typer.Exit(code=4)
+
+
+@fuzz_app.command("status")
+def fuzz_status(job: str = typer.Argument(..., help="任务目录（含 state.json）")) -> None:
+    """查看任务状态（读取 state.json 契约）。"""
+    from pathlib import Path as _Path
+
+    state_file = _Path(job) / "state.json" if _Path(job).is_dir() else _Path(job)
+    if not state_file.exists():
+        console.print(f"[red]未找到 state.json：{state_file}[/red]")
+        raise typer.Exit(code=2)
+    console.print_json(state_file.read_text(encoding="utf-8"))
+
+
+@fuzz_app.command("stop")
+def fuzz_stop(job: str = typer.Argument(..., help="任务目录")) -> None:
+    """请求优雅停止（写 STOP 标记，由运行的 run.sh 处理）。"""
+    from .fuzz.orchestrator import request_stop
+
+    if not request_stop(job):
+        console.print(f"[red]任务目录不存在：{job}[/red]")
+        raise typer.Exit(code=2)
+    console.print(f"已写入 STOP：{job}（运行中的任务将优雅退出）")
+
+
 def main() -> None:
     app()
 
