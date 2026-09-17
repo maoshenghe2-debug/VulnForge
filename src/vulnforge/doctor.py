@@ -17,6 +17,7 @@ Windows 下工具探测统一**经 WSL2**（AFL++ 只在 WSL 内运行）；Linu
 from __future__ import annotations
 
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -45,16 +46,20 @@ class Check:
     required: bool = False
 
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+
 def _decode(raw: bytes) -> str:
     """解码子进程输出：兼容 UTF-8 与 wsl.exe 的 UTF-16LE 混排。
 
     策略：先剔除空字节（UTF-16LE 的 ASCII 码位会退化为等值单字节），
     再按 UTF-8 解码——ASCII 内容（版本号 / 哨兵标记）在任何混排下均可读；
-    UTF-16LE 中的中文会显示为替换字符（仅影响 wsl.exe 告警行，可接受）。
+    最后剥离 ANSI 转义序列（工具彩色输出，如 ``afl-fuzz --version``）。
     """
     if not raw:
         return ""
-    return raw.replace(b"\x00", b"").decode("utf-8", errors="replace").strip()
+    text = raw.replace(b"\x00", b"").decode("utf-8", errors="replace")
+    return _ANSI_RE.sub("", text).strip()
 
 
 def _run(cmd: list[str], timeout: int = 25) -> tuple[int, str]:

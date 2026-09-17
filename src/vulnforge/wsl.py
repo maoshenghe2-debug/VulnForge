@@ -9,10 +9,12 @@
 from __future__ import annotations
 
 import platform
+import re
 import subprocess
 from pathlib import Path
 
 DISTRO = "Ubuntu"
+_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
 
 def is_windows() -> bool:
@@ -20,10 +22,11 @@ def is_windows() -> bool:
 
 
 def decode(raw: bytes) -> str:
-    """解码子进程输出：先剔除空字节（UTF-16LE 的 ASCII 位会退化为单字节），再按 UTF-8。"""
+    """解码子进程输出：剔除空字节（UTF-16LE ASCII 位退化）→ 剥离 ANSI 转义 → UTF-8。"""
     if not raw:
         return ""
-    return raw.replace(b"\x00", b"").decode("utf-8", errors="replace").strip()
+    text = raw.replace(b"\x00", b"").decode("utf-8", errors="replace")
+    return _ANSI_RE.sub("", text).strip()
 
 
 def run(cmd: list[str], timeout: int = 120) -> tuple[int, str]:

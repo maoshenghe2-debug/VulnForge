@@ -29,6 +29,15 @@ def test_python_check_logic(doctor_report):
     assert python_check["required"] is True
 
 
+def test_decode_strips_ansi_and_nulls():
+    """子进程输出解码：剥离 ANSI 转义序列与空字节（工具彩色输出 / wsl.exe 混排）。"""
+    from vulnforge.wsl import decode
+
+    assert decode(b"\x1b[0;36mafl-fuzz++4.09c\x1b[0m based on afl") == "afl-fuzz++4.09c based on afl"
+    assert decode(b"U\x00b\x00u\x00n\x00t\x00u\x00") == "Ubuntu"
+    assert decode(b"") == ""
+
+
 def test_workdir_check_creates_dir(tmp_path):
     check = check_workdir(tmp_path)
     assert check.status == STATUS_OK
