@@ -11,6 +11,9 @@
 - **fuzz 编排**（`vulnforge fuzz run / status / stop`）：afl-clang-fast 插桩构建（通用 harness 模板）+ 种子语料管理 + 多核（`-M` / `-S`）运行；`state.json`（≤5s 原子写）与 `build.json` 契约、`STOP` 优雅停止、`--resume` 断点续跑（`-i-`）；崩溃自动收集
 - 首个靶场样本：栈溢出（`range/samples/stack_overflow.c`，教学用）
 - 端到端实测：45s × 4 核 → 20,522 次执行 / 455.7 exec/s / 4 个崩溃（sig:11，已复现）
+- **崩溃分类**（`vulnforge triage run`）：gdb 批处理提取信号 / 故障地址 / 归一化栈帧（地址剥离，未解析帧归一化常量）；`dedup_key = sha256(signal | top5 帧 | addr>>12)` 去重；afl-tmin 最小化；repro.sh（退出码 0=复现 / 1=未复现）
+- 分类实测：3 个崩溃 → **1 个唯一缺陷**（`vuln_entry:14`，输入 66 → 41 字节，repro 退出码 0 已验证）
+- 跨平台修复：AFL 崩溃文件名含 `:`，在 Windows/DrvFs 上暴露为私有区字符 U+F03A——收集阶段统一归一化为 `_`，收集与解析双平台一致
 
 ### Planned
 - v0.1.0 剩余：靶场 6 样本 · 崩溃去重与最小化 · CNVD 报告 · `vulnforge demo`

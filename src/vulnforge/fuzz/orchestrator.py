@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .. import __version__
-from ..wsl import DISTRO, is_windows, to_posix
+from ..wsl import DISTRO, bash, is_windows, to_posix
 from .build import build_target
 
 WORKSPACE = Path(".vulnforge")
@@ -280,14 +280,25 @@ def run_job(
         ]
         state["stats"] = _aggregate(workers)
 
-    # 收集崩溃
+    # 收集崩溃：WSL/Linux 内 cp 到统一目录，随后做名称归一化——
+    # AFL 文件名含 ':'，Windows/DrvFs 暴露为私有区字符 U+F03A，统一替换为 '_'（双平台一致）
     crashes_dir = job / "crashes"
     crashes_dir.mkdir(exist_ok=True)
-    collected: list[str] = []
-    for crash in sorted((job / "out").glob("*/crashes/id*")):
-        dest = crashes_dir / f"{crash.parent.name}_{crash.name}"
-        shutil.copy2(crash, dest)
-        collected.append(str(dest))
+    collect_cmd = (
+        f"cd {to_posix(job)} && mkdir -p crashes && "
+        "for f in out/*/crashes/id*; do "
+        '[ -f "$f" ] || continue; '
+        'inst=$(basename "$(dirname "$(dirname "$f")")"); '
+        'cp "$f" "crashes/${inst}_$(basename "$f")"; '
+        "done"
+    )
+    _code, _output = bash(collect_cmd, timeout=120)
+    for item in list(crashes_dir.iterdir()):
+        if item.is_file():
+            new_name = item.name.replace("\uf03a", "_").replace(":", "_")
+            if new_name != item.name:
+                item.rename(crashes_dir / new_name)
+    collected = sorted(str(item) for item in crashes_dir.glob("*") if item.is_file())
     state["artifacts"]["crash_files"] = collected
 
     if state["job"]["status"] not in ("timeout", "failed"):

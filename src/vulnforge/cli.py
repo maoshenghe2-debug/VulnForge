@@ -222,6 +222,56 @@ def fuzz_stop(job: str = typer.Argument(..., help="任务目录")) -> None:
     console.print(f"已写入 STOP：{job}（运行中的任务将优雅退出）")
 
 
+triage_app = typer.Typer(help="崩溃分类：gdb 归一化 / 去重 / 最小化 / repro 脚本", no_args_is_help=True)
+app.add_typer(triage_app, name="triage")
+
+
+@triage_app.command("run")
+def triage_run(
+    job: str = typer.Argument(..., help="fuzz 任务目录（含 crashes/ 与 build/）"),
+    minimize: bool = typer.Option(True, "--minimize/--no-minimize", help="是否用 afl-tmin 最小化"),
+    limit: int = typer.Option(None, "--limit", help="最多处理多少个崩溃文件"),
+) -> None:
+    """崩溃分类流水线：gdb 分析 → dedup_key 去重 → 最小化 → repro.sh（0=复现/1=未复现）。"""
+    from pathlib import Path as _Path
+
+    from .triage.pipeline import run_triage
+
+    job_path = _Path(job)
+    if not (job_path / "crashes").is_dir():
+        console.print(f"[red]未找到崩溃目录：{job_path / 'crashes'}[/red]")
+        raise typer.Exit(code=2)
+
+    console.print(f"分析中：{job_path}（gdb 归一化 + afl-tmin{' 最小化' if minimize else ' 已跳过'}）…")
+    result = run_triage(job_path, minimize=minimize, limit=limit)
+    if not result.get("ok"):
+        console.print(f"[red]{result.get('error')}[/red]")
+        raise typer.Exit(code=4)
+
+    table = Table(
+        title=f"崩溃分类 · {result['summary']['crashes']} 崩溃 → {result['summary']['clusters']} 个唯一缺陷"
+    )
+    table.add_column("去重键", no_wrap=True)
+    table.add_column("信号", no_wrap=True)
+    table.add_column("数量", justify="right")
+    table.add_column("栈顶（归一化）", overflow="fold")
+    table.add_column("最小化", overflow="fold")
+    for cluster in result["clusters"]:
+        minfo = cluster.get("minimized") or {}
+        min_txt = f"{minfo.get('original_size')} → {minfo.get('minimized_size')} 字节" if minfo.get("ok") else "（跳过）"
+        table.add_row(
+            cluster["key"],
+            str(cluster["signal"]),
+            str(cluster["count"]),
+            " ← ".join(cluster["frames"][:3]) or "?",
+            min_txt,
+        )
+    console.print(table)
+    for cluster in result["clusters"]:
+        console.print(f"  [{cluster['key']}] repro: [bold]{cluster['repro']}[/bold]")
+    console.print(f"报告：[bold]{result['job_dir']}/triage/triage.json[/bold]")
+
+
 def main() -> None:
     app()
 
